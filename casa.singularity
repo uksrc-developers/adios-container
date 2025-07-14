@@ -1,0 +1,84 @@
+Bootstrap: localimage
+From: adios.sif
+
+%files
+compress_ms.py /opt/software/compress_ms.py
+compress_ms.sh /opt/install/bin/compress_ms.sh
+
+%post
+
+    /opt/views/view/bin/python -m venv /opt/venv && \
+    . /opt/venv/bin/activate && \
+    pip install numpy==1.26.4
+
+# install casacore
+
+    apt-get update && \
+    apt-get install -y rsync \
+        cmake && \
+    apt-get clean all && \
+    rm -r /var/lib/apt/lists/*
+
+    mkdir -p /opt/install/share/casadata && \
+    rsync -avz rsync://casa-rsync.nrao.edu/casa-data /opt/install/share/casadata
+
+    . /opt/spack-environment/activate.sh && \
+    . /opt/venv/bin/activate && \
+    git clone https://github.com/casacore/casacore --single-branch --branch v3.7.1 && \
+    cd casacore && \
+    mkdir build && \
+    cd build && \
+    cmake -DENABLE_SHARED=ON \
+        -DUSE_OPENMP=OFF \
+        -DUSE_READLINE=ON \
+        -DUSE_HDF5=ON \
+        -DENABLE_TABLELOCKING=OFF \
+        -DBUILD_PYTHON3=YES \
+            -DBUILD_DYSCO=ON \
+        -DUSE_ADIOS2=ON \
+        -DUSE_MPI=ON \
+        -DBUILD_PYTHON=NO \
+        -DBUILD_TESTING=OFF \
+        -DCMAKE_INSTALL_PREFIX=/opt/view \
+        -DDATA_DIR=/opt/install/share/casadata \
+        -DCMAKE_BUILD_TYPE=Debug \
+        -DCMAKE_CXX_FLAGS="-Wextra -Wall -W -Wpointer-arith -Woverloaded-virtual -Wwrite-strings -pedantic -Wno-long-long -O3" \
+        .. && \
+    make -j 20 && \
+    make install
+
+    git clone https://github.com/casacore/python-casacore --single-branch --branch v3.7.1 && \
+    cd python-casacore && \
+    . /opt/venv/bin/activate && \
+    pip install \
+        -Ccmake.define.CMAKE_PREFIX_PATH=/opt/view \
+        .
+
+    chmod a+x /opt/install/bin/compress_ms.sh
+
+    find -L /opt/views/view/* -type f -exec readlink -f '{}' \; | \
+    xargs file -i | \
+    grep 'charset=binary' | \
+    grep 'x-executable\|x-archive\|x-sharedlib' | \
+    awk -F: '{print $1}' | xargs strip
+
+    echo "export PATH=/opt/view/bin:/opt/install/bin:\$PATH" >> /opt/spack-environment/activate.sh
+    echo ". /opt/venv/bin/activate" >> /opt/spack-environment/activate.sh
+    cd /opt/software
+    for i in $( find . -type d -wholename "*site-packages/adios2" -a -not -wholename "*._view*" ); do cd $i/.. ; done && \
+    echo "export PYTHONPATH=$PYTHONPATH:$( pwd )" >> /opt/spack-environment/activate.sh
+    echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/view/lib" >> /opt/spack-environment/activate.sh
+
+# create entrypoint
+
+    { \
+      echo '#!/bin/sh' \
+      && echo '.' /opt/spack-environment/activate.sh \
+      && echo 'exec "$@"'; \
+    } > /entrypoint.sh \
+ && chmod a+x /entrypoint.sh \
+ && ln -s /opt/views/view /opt/view
+
+%runscript
+source /entrypoint.sh
+/opt/install/bin/compress_ms.sh $*

@@ -1,0 +1,142 @@
+Bootstrap: docker
+From: quay.io/pawsey/mpich-lustre-base:3.4.3_ubuntu20.04_lustrerelease
+
+%post -c /bin/bash
+    CUSTOM_ENV=/.singularity.d/env/99-zz_custom_env.sh
+    cat >$CUSTOM_ENV <<EOF
+#!/bin/bash
+PS1="\[\e[1;92m\][Singularity]\[\e[m\] \u@\h:\w\$ "
+EOF
+    chmod 755 $CUSTOM_ENV
+    
+%post
+   export DEBIAN_FRONTEND=noninteractive
+   export J=90
+
+   apt-get update
+
+   apt-get -y --no-install-recommends  -v install \
+        less \
+        git \
+        abseil-cpp \
+        bison \
+        bzip2 \
+        c-blosc2 \
+        diffutils \
+        findutils \
+        gettext \
+        gmake \
+        hwloc \
+        krb5 \
+        libarchive \
+        libcatalyst \
+        libedit \
+        libevent \
+        libffi \
+        libiconv \
+        libpciaccess \
+        libpng \
+        libsigsegv \
+        libxcrypt \
+        libxml2 \
+        lizard \
+        lz4 \
+        lzo \
+        m4 \
+        ncurses \
+        numactl \
+        openssh \
+        openssl \
+        pigz \ 
+        pkgconfig \
+        pmix \
+        protobuf \
+        sed \
+        snappy \
+        sz \
+        tar \
+        xz \
+        yaml-cpp \
+        zfp \
+        zstd \
+        autoconf \
+        automake \
+        ca-certificates-mozilla \
+        cmake \
+        compiler-wrapper \
+        glibc \
+        libfabric \
+        libtool \
+        meson \
+        ninja \
+        openblas \
+        perl \
+        util-macros && \
+        apt-get clean all && \
+        rm -r /var/lib/apt/lists/*
+
+# prep spack environment
+   mkdir -p /opt/spack-environment && \
+    set -o noclobber \
+    && (echo 'spack:' \
+    && echo '  specs: [adios2+mpi+mgard+python+bzip2, hdf5, fftw]' \
+    && echo '  view: /opt/views/view' \
+    && echo '  concretizer:' \
+    && echo '    unify: true' \
+    && echo '  config:' \
+    && echo '    install_tree: /opt/software') > /opt/spack-environment/spack.yaml
+
+   cd /opt && \
+    git clone https://github.com/spack/spack
+
+# install using spack
+
+   . /opt/spack/share/spack/setup-env.sh && \
+    cd /opt/spack-environment && \
+    spack env activate . && \
+    spack external find && \
+    spack config rm packages:zlib && \
+    spack add cfitsio && \
+    spack concretize -f && \
+    spack install --fail-fast && \
+    spack gc -y
+
+   . /opt/spack/share/spack/setup-env.sh && \
+    cd /opt/spack-environment && \
+    spack env activate . && \   
+    spack add wcslib gsl boost+filesystem+system+test+python && \
+    spack concretize -f && \
+    spack install --fail-fast && \
+    spack gc -y
+
+
+# create env file
+
+   . /opt/spack/share/spack/setup-env.sh && \
+    cd /opt/spack-environment && \
+    spack env activate --sh -d . > activate.sh
+
+# clean up
+
+   find -L /opt/views/view/* -type f -exec readlink -f '{}' \; | \
+    xargs file -i | \
+    grep 'charset=binary' | \
+    grep 'x-executable\|x-archive\|x-sharedlib' | \
+    awk -F: '{print $1}' | xargs strip
+
+# ensure env is reachable 
+
+   echo "export PATH=/opt/view/bin:\$PATH" >> /opt/spack-environment/activate.sh
+
+# create entrypoint
+
+   { \
+      echo '#!/bin/sh' \
+      && echo '.' /opt/spack-environment/activate.sh \
+      && echo 'exec "$@"'; \
+    } > /entrypoint.sh \
+&& chmod a+x /entrypoint.sh \
+&& ln -s /opt/views/view /opt/view
+
+%runscript
+  /entrypoint.sh
