@@ -122,8 +122,11 @@ def write_adios_high(data, output_bp, operator: str="mgard", accuracy=("1e-6","1
                                     max_real: {np.nanmax(sdata.real)},
                                     min_imag: {np.nanmin(sdata.imag)},
                                     max_imag: {np.nanmax(sdata.imag)}""")
+                    print('Running real write')
                     fr.write("real", sdata.real.astype(np.float32), shape=shape, start=list(start),count=list(count), operations=[(operator, adios_args[0])])
+                    print('Running imag write')
                     fr.write("imag", sdata.imag.astype(np.float32), shape=shape, start=list(start),count=list(count), operations=[(operator, adios_args[1])])
+                    print('Imag write completed')
                 i+=1
     else:
         with adios2.open(output_bp, 'w') as f:
@@ -299,7 +302,7 @@ def parse_args():
     parser.add_argument("output_bp", help="The output file path")
     parser.add_argument('-f','--full',help="Write the data using the full adios python API. Default is to use the High-level API.", action='store_true')
     parser.add_argument('-o','--operator', help="The operator with which to save the data (default: 'mgard')", default='mgard')
-    parser.add_argument('-a','--accuracy', help="The accuracy parameter for the operator, provide 2 values if two accuracies are required (default: '1e-6')", default='1e-6', nargs='+')
+    parser.add_argument('-a','--accuracy', help="The accuracy parameter for the operator, provide 2 values if two accuracies are required", default=['1e-6','1e-6'], nargs='+')
     parser.add_argument('-m','--mode', help="The mode parameter for the operator, 'ABS' or 'REL' (default: 'ABS')",default='ABS')
     parser.add_argument('-s','--smoothness', help="The smoothness parameter for the operator (default: 0)",default='0')
     parser.add_argument('-c', '--cylindrical', help="Use amplitude and phase instead of real and imaginary", action='store_true')

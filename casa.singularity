@@ -1,15 +1,15 @@
 Bootstrap: localimage
-From: adios.sif
+From: adios3.sif
 
 %files
 compress_ms.py /opt/software/compress_ms.py
 compress_ms.sh /opt/install/bin/compress_ms.sh
 
 %post
-
+    . /opt/spack/share/spack/setup-env.sh
+    spack env activate /opt/spack-environment
     /opt/views/view/bin/python -m venv /opt/venv && \
     . /opt/venv/bin/activate && \
-    pip install numpy==1.26.4
 
 # install casacore
 
@@ -24,10 +24,10 @@ compress_ms.sh /opt/install/bin/compress_ms.sh
 
     . /opt/spack-environment/activate.sh && \
     . /opt/venv/bin/activate && \
-    git clone https://github.com/casacore/casacore --single-branch --branch v3.7.1 && \
-    cd casacore && \
-    mkdir build && \
-    cd build && \
+    git clone https://github.com/casacore/casacore --single-branch --branch v3.7.1
+    cd casacore
+    mkdir build
+    cd build
     cmake -DENABLE_SHARED=ON \
         -DUSE_OPENMP=OFF \
         -DUSE_READLINE=ON \
@@ -49,18 +49,16 @@ compress_ms.sh /opt/install/bin/compress_ms.sh
 
     git clone https://github.com/casacore/python-casacore --single-branch --branch v3.7.1 && \
     cd python-casacore && \
-    . /opt/venv/bin/activate && \
+    . /opt/venv/bin/activate
+    export BOOST_ROOT=$(spack location -i boost)
+    export BOOST_LIBRARYDIR=$BOOST_ROOT/lib
+    export BOOST_INCLUDEDIR=$BOOST_ROOT/include
+    sed -i -e 's/ COMPONENTS python3//' CMakeLists.txt
     pip install \
         -Ccmake.define.CMAKE_PREFIX_PATH=/opt/view \
         .
 
     chmod a+x /opt/install/bin/compress_ms.sh
-
-    find -L /opt/views/view/* -type f -exec readlink -f '{}' \; | \
-    xargs file -i | \
-    grep 'charset=binary' | \
-    grep 'x-executable\|x-archive\|x-sharedlib' | \
-    awk -F: '{print $1}' | xargs strip
 
     echo "export PATH=/opt/view/bin:/opt/install/bin:\$PATH" >> /opt/spack-environment/activate.sh
     echo ". /opt/venv/bin/activate" >> /opt/spack-environment/activate.sh
@@ -80,5 +78,4 @@ compress_ms.sh /opt/install/bin/compress_ms.sh
  && ln -s /opt/views/view /opt/view
 
 %runscript
-source /entrypoint.sh
-/opt/install/bin/compress_ms.sh $*
+. /entrypoint.sh $@
