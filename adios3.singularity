@@ -1,0 +1,56 @@
+Bootstrap: docker
+From: spack/ubuntu-jammy:develop
+
+%post -c /bin/bash
+    CUSTOM_ENV=/.singularity.d/env/99-zz_custom_env.sh
+    cat >$CUSTOM_ENV <<EOF
+#!/bin/bash
+PS1="\[\e[1;92m\][Singularity]\[\e[m\] \u@\h:\w\$ "
+EOF
+    chmod 755 $CUSTOM_ENV
+    
+%post
+   export DEBIAN_FRONTEND=noninteractive
+   export J=90
+   apt-get -y update
+   apt-get -y install less emacs
+
+# prep spack environment
+   mkdir -p /opt/spack-environment && \
+    set -o noclobber \
+    && (echo 'spack:' \
+    && echo '  specs: [cmake, sz, hdf5+hl~mpi, cppzmq, openblas, cfitsio, wcslib+cfitsio, fftw~mpi, gsl, patch, subversion, cppunit, xerces-c, mgard, boost+chrono+date_time+filesystem+program_options+python+regex+signals+system+test+thread cxxstd=11, py-pip, zfp@0.5.5, libffi, mpich, flex@2.6.4, bison, py-numpy, adios2+bzip2+mgard+mpi+python, py-scikit-build, py-setuptools, py-wheel, py-scikit-build-core, py-setuptools-scm]' \
+    && echo '  view: /opt/views/view' \
+    && echo '  concretizer:' \
+    && echo '    unify: true' \
+    && echo '  config:' \
+    && echo '    install_tree: /opt/software') > /opt/spack-environment/spack.yaml
+
+# install using spack
+
+   . /opt/spack/share/spack/setup-env.sh && \
+    cd /opt/spack-environment && \
+    spack env activate . && \
+    spack concretize -f && \
+    spack install --fail-fast && \
+
+   . /opt/spack/share/spack/setup-env.sh && \
+    cd /opt/spack-environment && \
+    spack env activate --sh -d . > activate.sh
+
+# ensure env is reachable 
+
+   echo "export PATH=/opt/view/bin:\$PATH" >> /opt/spack-environment/activate.sh
+
+# create entrypoint
+
+   { \
+      echo '#!/bin/sh' \
+      && echo '.' /opt/spack-environment/activate.sh \
+      && echo 'exec "$@"'; \
+    } > /entrypoint.sh \
+&& chmod a+x /entrypoint.sh \
+&& ln -s /opt/views/view /opt/view
+
+%runscript
+  /entrypoint.sh

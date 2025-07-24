@@ -3,8 +3,9 @@
 Attempt to build a singularity environment for ADIOS2 and MGARD.
 
 This follows the original containers and builds the ADIOS2 environment
-using Spack. Casacore and the python bindings are then built from
-source.
+using Spack. Casacore and the Python bindings are then built from
+source. There is a slight bodge in python-casacore build to work round
+what seems to be an issue with the cmake supplied by Spack.
 
 To build:
 
@@ -31,7 +32,13 @@ is too small you will get an error message.
 You can uncompress to a numpy file:
 
 ```
-. /entrypoint.sh
 python /opt/software/compress_ms.py my_example.ms DATA adios.output --numpy -a 1e-2
 ```
 
+You can write a column back to a MS:
+
+```
+python /opt/software/compress_ms.py my_example.ms DATA adios.output --numpy -a 1e-2
+```
+
+This does *not* use a compressed storage manager, it's just uncompressing the mgard compressed output back into the DATA column. So we can test the effects of compression using this column, but it's not a replacement for dysco.
